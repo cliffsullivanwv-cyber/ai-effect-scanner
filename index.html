@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Effect in Education</title>
+<link rel="stylesheet" href="lib/trail.css">
+<style>
+  .hero { background: var(--pine); color: #fff; padding: 48px 16px 40px; }
+  .hero .in, .wrap { max-width: 920px; margin: 0 auto; }
+  .hero h1 { font-size: clamp(2rem, 5vw, 3rem); }
+  .hero p { font-size: 1.15rem; max-width: 36em; opacity: .9; margin: .8em 0 0; }
+  .wrap { padding: 28px 16px 56px; display: grid; gap: 24px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .cards a { text-decoration: none; color: inherit; display: grid; gap: 8px; transition: transform .15s, box-shadow .15s; }
+  .cards a:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,.08); }
+  .cards .step { font: 700 .8rem var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--pine-2); }
+  .cards h2 { font-size: 1.35rem; }
+  ol.how { line-height: 1.6; margin: .6em 0 0; padding-left: 1.3em; }
+  .mode { font-weight: 600; }
+</style>
+</head>
+<body>
+<section class="hero"><div class="in">
+  <h1>AI Effect in Education</h1>
+  <p>Students weigh each AI scenario and hold up a card: Take the Trail, Approach with Caution, or Risky Terrain. One phone scans the whole room in seconds.</p>
+</div></section>
+
+<div class="wrap">
+  <div class="cards">
+    <a class="panel" href="cards.html">
+      <span class="step">Step 1</span><h2>Print cards</h2>
+      <span class="muted">One numbered card per student. Same number every time.</span>
+    </a>
+    <a class="panel" href="display.html">
+      <span class="step">Step 2 · Classroom screen</span><h2>Open the display</h2>
+      <span class="muted">Shows the scenario, who has answered, and the reveal.</span>
+    </a>
+    <a class="panel" href="scan.html">
+      <span class="step">Step 3 · Teacher phone</span><h2>Scan the room</h2>
+      <span class="muted">Point the camera at the class. Answers appear on the display live.</span>
+    </a>
+  </div>
+
+  <section class="panel">
+    <h2>How a round works</h2>
+    <ol class="how">
+      <li>Show the scenario on the display. Students discuss it.</li>
+      <li>Each student turns their card so their judgment is on top, then holds it up with the code facing you.</li>
+      <li>Sweep the phone across the room. The display fills in as each card is read. The blank edge means "not answering".</li>
+      <li>Tap <b>Reveal</b> to show how the class split, then have students make the case for their path.</li>
+    </ol>
+    <p class="mode" id="mode"></p>
+  </section>
+</div>
+<script src="firebase-config.js"></script>
+<script src="lib/trail-sync.js"></script>
+<script>
+  document.getElementById('mode').textContent = TrailSync.mode === 'firebase'
+    ? 'Live mode is on: scan on your phone, show results on any screen.'
+    : 'Same-device mode: the scanner and display must run in one browser until Firebase is set up (see README).';
+</script>
+</body>
+</html>

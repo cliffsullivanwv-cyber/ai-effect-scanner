@@ -1,0 +1,84 @@
+/* AI Effect in Education — shared look for the screen pages */
+@import url('https://fonts.googleapis.com/css2?family=Bitter:wght@600;800&family=Source+Sans+3:wght@400;600;700&display=swap');
+
+:root {
+  --pine: #1f3d2b;
+  --pine-2: #2b5239;
+  --paper: #f4efe4;
+  --paper-2: #e9e1d0;
+  --ink: #1c1f1a;
+  --muted: #5d6458;
+  --line: #cfc5b0;
+  --trail: #2f7d4f;
+  --caution: #c88a12;
+  --risky: #b23a2e;
+  --blank: #8b8f86;
+  --radius: 14px;
+  --head: 'Bitter', Georgia, serif;
+  --body: 'Source Sans 3', system-ui, -apple-system, Segoe UI, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--body);
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { font-family: var(--head); margin: 0; line-height: 1.15; }
+a { color: var(--pine-2); }
+
+button, .btn {
+  font: 600 1rem var(--body);
+  border: 2px solid var(--pine);
+  background: var(--pine);
+  color: #fff;
+  padding: .6em 1.1em;
+  border-radius: 999px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: .4em;
+  touch-action: manipulation;
+}
+button.ghost, .btn.ghost { background: transparent; color: var(--pine); }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible, .btn:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 3px solid var(--caution); outline-offset: 2px;
+}
+
+input, select {
+  font: 1rem var(--body);
+  padding: .55em .7em;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.chip { display: inline-flex; align-items: center; gap: .35em; font-weight: 600; }
+.chip::before { content: ''; width: .8em; height: .8em; border-radius: 3px; background: currentColor; }
+.c-trail { color: var(--trail); }
+.c-caution { color: var(--caution); }
+.c-risky { color: var(--risky); }
+
+.topbar {
+  background: var(--pine); color: #fff;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+}
+.topbar h1 { font-size: 1.15rem; letter-spacing: .01em; }
+.topbar .spacer { flex: 1; }
+.badge {
+  font: 700 .85rem var(--body); letter-spacing: .08em; text-transform: uppercase;
+  background: rgba(255,255,255,.14); padding: .3em .7em; border-radius: 999px;
+}
+.status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--blank); display: inline-block; }
+.status-dot.on { background: #6fd18f; }
+
+.panel {
+  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px;
+}
+.muted { color: var(--muted); }
+.hidden { display: none !important; }

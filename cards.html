@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trail Cards Printer</title>
+<link rel="stylesheet" href="lib/trail.css">
+<style>
+  .controls { max-width: 900px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
+  .controls .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; }
+  .controls label { display: grid; gap: 6px; font-weight: 600; }
+  .controls input[type=number] { width: 7em; }
+  .tips { margin: 0; padding-left: 1.2em; line-height: 1.5; }
+  .legend { display: flex; flex-wrap: wrap; gap: 18px; }
+
+  .sheet-wrap { display: grid; justify-content: center; gap: 24px; padding: 8px 16px 48px; }
+  .sheet {
+    width: 8.5in; height: 11in; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.15);
+    display: flex; flex-direction: column; align-items: center; justify-content: space-evenly;
+    padding: .35in; overflow: hidden;
+  }
+
+  /* --c is the card's side length; everything else scales from it */
+  .card {
+    --c: 7.6in;
+    width: var(--c); height: var(--c);
+    position: relative; flex: none;
+    font-family: var(--body);
+    color: #111;
+  }
+  .two .card { --c: 4.95in; }
+  .two .card + .card { border-top: 1px dashed #bbb; }
+  .card svg.marker {
+    position: absolute;
+    left: calc(var(--c) * .09); top: calc(var(--c) * .09);
+    width: calc(var(--c) * .82); height: calc(var(--c) * .82);
+    shape-rendering: crispEdges;
+  }
+  .side {
+    position: absolute; left: 50%; top: 50%;
+    width: calc(var(--c) * .74);
+    margin-left: calc(var(--c) * -.37);
+    height: calc(var(--c) * .1);
+    margin-top: calc(var(--c) * -.05);
+    display: flex; align-items: center; justify-content: center; gap: .5em;
+    font: 700 calc(var(--c) * .042) var(--body);
+    letter-spacing: .02em; white-space: nowrap;
+  }
+  .side .sw { width: .8em; height: .8em; border-radius: 3px; flex: none; }
+  /* Each label faces outward, so it reads upright when that edge is held at the top */
+  .side.top    { transform: translateY(calc(var(--c) * -.44)); }
+  .side.right  { transform: rotate(90deg)  translateY(calc(var(--c) * -.44)); }
+  .side.bottom { transform: rotate(180deg) translateY(calc(var(--c) * -.44)); }
+  .num {
+    position: absolute; font: 800 calc(var(--c) * .035) var(--head); color: #333;
+  }
+  .num.tl { left: calc(var(--c) * .03); top: calc(var(--c) * .025); }
+  .num.br { right: calc(var(--c) * .03); bottom: calc(var(--c) * .025); transform: rotate(180deg); }
+  .brand {
+    position: absolute; right: calc(var(--c) * .03); top: calc(var(--c) * .03);
+    font: 600 calc(var(--c) * .02) var(--body); color: #777; letter-spacing: .06em; text-transform: uppercase;
+  }
+
+  @page { size: letter portrait; margin: 0; }
+  @media print {
+    body { background: #fff; }
+    .controls, .topbar { display: none !important; }
+    .sheet-wrap { padding: 0; gap: 0; display: block; }
+    .sheet { box-shadow: none; break-after: page; page-break-after: always; }
+    .sheet:last-child { break-after: auto; page-break-after: auto; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+  @media screen and (max-width: 900px) {
+    .sheet-wrap { justify-content: start; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>AI Effect in Education · Card Printer</h1>
+  <span class="spacer"></span>
+  <a class="btn ghost" style="color:#fff;border-color:rgba(255,255,255,.5)" href="index.html">Home</a>
+</header>
+
+<section class="controls">
+  <div class="panel">
+    <div class="row">
+      <label>Number of cards
+        <input id="count" type="number" min="1" max="60" value="30">
+      </label>
+      <label>Layout
+        <select id="layout">
+          <option value="one">1 per page (best scanning distance)</option>
+          <option value="two">2 per page (saves paper, closer range)</option>
+        </select>
+      </label>
+      <button id="print">Print cards</button>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="legend">
+      <span class="chip c-trail">Top edge: Take the Trail</span>
+      <span class="chip c-caution">Right edge: Approach with Caution</span>
+      <span class="chip c-risky">Bottom edge: Risky Terrain</span>
+      <span class="muted">Left edge: blank (scanner ignores it)</span>
+    </div>
+    <ul class="tips muted" style="margin-top:10px">
+      <li>Print at <b>100% / Actual size</b>. Turn off "Fit to page" so the codes keep their square shape.</li>
+      <li>Cardstock works best. Glossy paper glares under classroom lights.</li>
+      <li>Give each student the same card number every time. The number is printed in two corners.</li>
+      <li>Students hold the card with their choice at the top and the code facing the scanner.</li>
+    </ul>
+  </div>
+</section>
+
+<main id="sheets" class="sheet-wrap" aria-label="Card preview"></main>
+
+<script src="lib/cv.js"></script>
+<script src="lib/aruco.js"></script>
+<script src="lib/trail-dictionary.js"></script>
+<script src="lib/trail-core.js"></script>
+<script>
+(function () {
+  var countEl = document.getElementById('count');
+  var layoutEl = document.getElementById('layout');
+  var sheets = document.getElementById('sheets');
+  var byKey = {};
+  TrailCore.CHOICES.forEach(function (c) { byKey[c.key] = c; });
+
+  function sideHTML(pos) {
+    var key = TrailCore.SIDE_TO_CHOICE[pos];
+    if (!key) return '';
+    var c = byKey[key];
+    return '<div class="side ' + pos + '"><span class="sw" style="background:' + c.color + '"></span>' + c.label + '</div>';
+  }
+
+  function cardHTML(n) {
+    var svg = TrailCore.markerSVG(n - 1).replace('<svg ', '<svg class="marker" aria-label="Card ' + n + ' code" ');
+    return '<div class="card">' + svg +
+      sideHTML('top') + sideHTML('right') + sideHTML('bottom') +
+      '<div class="num tl">#' + n + '</div><div class="num br">#' + n + '</div>' +
+      '<div class="brand">AI Effect in Education</div></div>';
+  }
+
+  function render() {
+    var n = Math.max(1, Math.min(TrailCore.MAX_CARDS, parseInt(countEl.value, 10) || 1));
+    countEl.value = n;
+    var perPage = layoutEl.value === 'two' ? 2 : 1;
+    var html = '';
+    for (var i = 1; i <= n; i += perPage) {
+      html += '<section class="sheet ' + (perPage === 2 ? 'two' : 'one') + '">';
+      for (var k = i; k < i + perPage && k <= n; k++) html += cardHTML(k);
+      html += '</section>';
+    }
+    sheets.innerHTML = html;
+  }
+
+  countEl.addEventListener('input', render);
+  layoutEl.addEventListener('change', render);
+  document.getElementById('print').addEventListener('click', function () { window.print(); });
+  render();
+})();
+</script>
+</body>
+</html>

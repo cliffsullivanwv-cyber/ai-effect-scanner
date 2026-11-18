@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trail Display</title>
+<link rel="stylesheet" href="lib/trail.css">
+<style>
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; overflow: hidden; font-size: clamp(16px, 1.25vw, 28px); }
+
+  .bar-top {
+    background: var(--pine); color: #fff;
+    display: flex; align-items: center; gap: 1.2em; padding: .7em 1.6em;
+  }
+  .bar-top h1 { font-size: 1.15em; }
+  .bar-top .spacer { flex: 1; }
+  .bar-top .count { font: 800 1.3em var(--head); }
+  .bar-top .count small { font: 600 .65em var(--body); opacity: .8; margin-left: .3em; }
+
+  .stage { flex: 1; display: grid; grid-template-rows: auto 1fr; gap: 1.6em; padding: 2em 3em 1.4em; min-height: 0; }
+  .scenario small {
+    display: block; color: var(--pine-2); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: .85em; margin-bottom: .4em;
+  }
+  .scenario h2 { font-size: 2.4em; color: var(--pine); }
+  .scenario p { font-size: 1.55em; line-height: 1.4; max-width: 46em; margin: .6em 0 0; }
+  .scenario.text-only p { font: 600 2.15em/1.35 var(--head); color: var(--pine); max-width: 34em; margin: 0; }
+
+  .lower { min-height: 0; display: grid; align-content: end; gap: 1.2em; }
+  .choices { display: flex; flex-wrap: wrap; gap: .6em 2em; font-size: 1.15em; }
+  .prompt { font: 600 1.25em var(--head); color: var(--muted); }
+
+  .responders { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.6em, 1fr)); gap: .4em; }
+  .responders div {
+    height: 2.3em; border-radius: .45em; display: grid; place-items: center;
+    font-weight: 700; background: var(--paper-2); color: var(--muted);
+    transition: background .25s, color .25s, transform .25s;
+  }
+  .responders div.in { background: var(--pine-2); color: #fff; transform: scale(1.04); }
+
+  .results { display: grid; gap: .8em; }
+  .result-row { display: grid; grid-template-columns: 13em 1fr 5.5em; align-items: center; gap: 1em; }
+  .result-row .lbl { font: 700 1.25em var(--head); }
+  .track { height: 2.6em; background: var(--paper-2); border-radius: .5em; overflow: hidden; }
+  .fill { height: 100%; width: 0; border-radius: .5em; transition: width .9s cubic-bezier(.2,.8,.2,1); }
+  .result-row .num { font: 800 1.6em var(--head); text-align: right; }
+  .result-row .num small { display: block; font: 600 .5em var(--body); color: var(--muted); }
+
+  .controls {
+    position: fixed; right: 1em; bottom: 1em; display: flex; gap: .5em;
+    opacity: .2; transition: opacity .2s;
+  }
+  .controls:hover, .controls:focus-within { opacity: 1; }
+  .controls button { font-size: .8em; }
+
+  .join { margin: auto; max-width: 30em; width: calc(100% - 32px); display: grid; gap: 1em; text-align: center; }
+  .join input { font-size: 2em; text-align: center; letter-spacing: .2em; text-transform: uppercase; }
+
+  @media (max-width: 700px) {
+    .stage { padding: 1.2em 16px; }
+    .result-row { grid-template-columns: 7em 1fr 3.5em; }
+    .scenario h2 { font-size: 1.7em; }
+    .scenario p { font-size: 1.2em; }
+  }
+</style>
+</head>
+<body>
+<header class="bar-top">
+  <h1>AI Effect in Education</h1>
+  <span class="spacer"></span>
+  <span id="scnCount"></span>
+  <span class="count hidden" id="respCount"></span>
+  <span class="badge" id="roomBadge"></span>
+  <span class="status-dot" id="conn" title="Connection"></span>
+</header>
+
+<!-- Join screen -->
+<section class="join panel hidden" id="join">
+  <h2>Join the scanner's room</h2>
+  <p class="muted">Type the room code shown at the top of the scanner phone.</p>
+  <input id="joinInput" maxlength="12" autocomplete="off" aria-label="Room code">
+  <button id="joinBtn" style="justify-content:center">Show scenarios</button>
+  <p class="muted" id="modeNote"></p>
+</section>
+
+<!-- Game screen -->
+<main class="stage hidden" id="stage">
+  <section class="scenario">
+    <small id="scnLabel"></small>
+    <h2 id="scnTitle"></h2>
+    <p id="scnText"></p>
+  </section>
+
+  <section class="lower">
+    <div id="waiting">
+      <p class="prompt" style="margin:0 0 .6em">Choose your path and hold up your card.</p>
+      <div class="choices" id="choiceKey"></div>
+      <div class="responders" id="responders" style="margin-top:1em" aria-label="Who has answered"></div>
+    </div>
+    <div id="revealed" class="hidden">
+      <div class="results" id="results"></div>
+      <p class="prompt" style="margin:1em 0 0">Explain your vote: benefits, risks, and trade-offs. What information is missing that could change your vote?</p>
+    </div>
+  </section>
+</main>
+
+<div class="controls hidden" id="controls">
+  <button class="ghost" id="prevBtn" title="Previous (←)">‹ Prev</button>
+  <button id="revealBtn" title="Reveal (R)">Reveal</button>
+  <button class="ghost" id="nextBtn" title="Next (→)">Next ›</button>
+  <button class="ghost" id="fsBtn" title="Full screen (F)">Full screen</button>
+</div>
+
+<script src="firebase-config.js"></script>
+<script src="scenarios.js"></script>
+<script src="lib/trail-core.js"></script>
+<script src="lib/trail-sync.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var scenarios = window.TRAIL_SCENARIOS || [];
+  var sync, state = { scenario: 0, revealed: false, cardCount: 30, responses: {} };
+
+  $('choiceKey').innerHTML = TrailCore.CHOICES.map(function (c) {
+    return '<span class="chip c-' + c.key + '">' + c.label + '</span>';
+  }).join('');
+  $('results').innerHTML = TrailCore.CHOICES.map(function (c) {
+    return '<div class="result-row"><span class="lbl c-' + c.key + '">' + c.label + '</span>' +
+      '<div class="track"><div class="fill" id="fill-' + c.key + '" style="background:' + c.color + '"></div></div>' +
+      '<span class="num" id="num-' + c.key + '">0</span></div>';
+  }).join('');
+  $('modeNote').textContent = TrailSync.mode === 'firebase' ? '' :
+    'Same-device mode: the scanner must be open in this same browser.';
+
+  var params = new URLSearchParams(location.search);
+  var room = TrailSync.cleanRoom(params.get('room') || '');
+  if (room) start(room); else { $('join').classList.remove('hidden'); $('joinInput').focus(); }
+
+  $('joinBtn').addEventListener('click', join);
+  $('joinInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') join(); });
+  function join() {
+    var r = TrailSync.cleanRoom($('joinInput').value);
+    if (!r) return;
+    history.replaceState(null, '', '?room=' + r);
+    start(r);
+  }
+
+  function start(r) {
+    $('join').classList.add('hidden');
+    $('stage').classList.remove('hidden');
+    $('controls').classList.remove('hidden');
+    $('respCount').classList.remove('hidden');
+    $('roomBadge').textContent = 'Room ' + r;
+    sync = TrailSync.connect(r);
+    sync.onConnection(function (ok, msg) {
+      $('conn').classList.toggle('on', ok);
+      $('conn').title = ok ? 'Connected' : ('Not connected' + (msg ? ': ' + msg : ''));
+    });
+    sync.onState(function (s) { state = s; render(); });
+  }
+
+  var builtFor = 0, lastKey = '';
+  function render() {
+    var sc = scenarios[state.scenario];
+    var n = state.cardCount;
+    $('scnCount').textContent = scenarios.length ? 'Scenario ' + (state.scenario + 1) + ' / ' + scenarios.length : '';
+    $('scnLabel').textContent = 'Scenario ' + (state.scenario + 1);
+    var hasTitle = !!(sc && sc.title);
+    $('scnTitle').textContent = hasTitle ? sc.title : '';
+    $('scnTitle').classList.toggle('hidden', !hasTitle);
+    document.querySelector('.scenario').classList.toggle('text-only', !hasTitle);
+    $('scnText').textContent = sc ? sc.text : 'Add your scenarios to scenarios.js.';
+
+    var mine = state.responses[state.scenario] || {};
+    var t = TrailCore.tally(mine, n);
+    $('respCount').innerHTML = t.total + '<small>of ' + n + ' answered</small>';
+
+    if (builtFor !== n) {
+      var h = '';
+      for (var i = 1; i <= n; i++) h += '<div id="r' + i + '">' + i + '</div>';
+      $('responders').innerHTML = h; builtFor = n;
+    }
+    for (var k = 1; k <= n; k++) $('r' + k).classList.toggle('in', !!mine[k]);
+
+    $('waiting').classList.toggle('hidden', state.revealed);
+    $('revealed').classList.toggle('hidden', !state.revealed);
+    $('revealBtn').textContent = state.revealed ? 'Hide' : 'Reveal';
+    $('prevBtn').disabled = state.scenario <= 0;
+    $('nextBtn').disabled = state.scenario >= scenarios.length - 1;
+
+    // Bars grow from zero each time results are revealed
+    var key = state.scenario + ':' + state.revealed;
+    var reset = key !== lastKey; lastKey = key;
+    TrailCore.CHOICES.forEach(function (c) {
+      var cnt = t.counts[c.key], pct = t.total ? Math.round(cnt / t.total * 100) : 0;
+      $('num-' + c.key).innerHTML = cnt + '<small>' + pct + '%</small>';
+      var fill = $('fill-' + c.key);
+      if (!state.revealed) { fill.style.width = '0'; return; }
+      if (reset) { fill.style.width = '0'; void fill.offsetWidth; }
+      fill.style.width = pct + '%';
+    });
+  }
+
+  function go(d) {
+    if (!sync) return;
+    var next = Math.max(0, Math.min(scenarios.length - 1, state.scenario + d));
+    if (next !== state.scenario) sync.setState({ scenario: next, revealed: false });
+  }
+  function toggleReveal() { if (sync) sync.setState({ revealed: !state.revealed }); }
+  function fullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+  }
+  $('prevBtn').addEventListener('click', function () { go(-1); });
+  $('nextBtn').addEventListener('click', function () { go(1); });
+  $('revealBtn').addEventListener('click', toggleReveal);
+  $('fsBtn').addEventListener('click', fullscreen);
+  document.addEventListener('keydown', function (e) {
+    if (!sync || e.target.tagName === 'INPUT') return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') go(1);
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(-1);
+    else if (e.key === 'r' || e.key === 'R' || e.key === ' ') { e.preventDefault(); toggleReveal(); }
+    else if (e.key === 'f' || e.key === 'F') fullscreen();
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f3d2b">
+<title>Trail Scanner</title>
+<link rel="stylesheet" href="lib/trail.css">
+<style>
+  body { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+  main { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 12px 16px 28px; display: grid; gap: 12px; align-content: start; }
+
+  .setup { display: grid; gap: 14px; }
+  .setup label { display: grid; gap: 6px; font-weight: 600; }
+  .setup .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .setup input { width: 100%; }
+  .setup .mode { font-size: .95rem; }
+  .err { color: var(--risky); font-weight: 600; }
+
+  .scenario-bar { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
+  .scenario-bar button { width: 44px; height: 44px; padding: 0; justify-content: center; font-size: 1.3rem; }
+  .scenario-bar .what { text-align: center; min-width: 0; }
+  .scenario-bar .what small { display: block; color: var(--muted); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; font-size: .75rem; }
+  .scenario-bar .what b { display: block; font-family: var(--head); font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .cam { position: relative; background: #0d140f; border-radius: var(--radius); overflow: hidden; }
+  .cam video, .cam canvas { display: block; width: 100%; height: auto; }
+  .cam canvas { position: absolute; inset: 0; height: 100%; }
+  .cam .hint {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 8px 12px;
+    background: linear-gradient(transparent, rgba(0,0,0,.65)); color: #fff; font-size: .9rem;
+  }
+  .cam .paused {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: rgba(13,20,15,.75); color: #fff; font-weight: 700; font-size: 1.2rem;
+  }
+
+  .tally { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
+  .tally .big { font: 800 2.2rem var(--head); line-height: 1; }
+  .tally .big span { font-size: 1.1rem; color: var(--muted); }
+  .tally .counts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .95rem; }
+
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .actions button { justify-content: center; }
+  .actions .reveal.on { background: var(--caution); border-color: var(--caution); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; }
+  .grid div {
+    height: 40px; border-radius: 8px; display: grid; place-items: center;
+    font-weight: 700; background: var(--paper-2); color: var(--muted); border: 2px solid transparent;
+  }
+  .grid div.trail { background: var(--trail); color: #fff; }
+  .grid div.caution { background: var(--caution); color: #fff; }
+  .grid div.risky { background: var(--risky); color: #fff; }
+  .grid div.flash { border-color: #fff; box-shadow: 0 0 0 3px var(--ink); }
+  .grid.private div.trail, .grid.private div.caution, .grid.private div.risky { background: var(--pine-2); }
+
+  .footer-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .9rem; }
+  .footer-row label { display: inline-flex; gap: 6px; align-items: center; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>Trail Scanner</h1>
+  <span class="spacer"></span>
+  <span class="badge" id="roomBadge" title="Room code">—</span>
+  <span class="status-dot" id="conn" title="Connection"></span>
+</header>
+
+<main>
+  <!-- Step 1: setup -->
+  <section class="panel setup" id="setup">
+    <h2>Set up this round</h2>
+    <div class="row">
+      <label>Room code
+        <input id="roomInput" autocomplete="off" autocapitalize="characters" maxlength="12">
+      </label>
+      <label>Cards in use
+        <input id="countInput" type="number" min="1" max="60" value="30" inputmode="numeric">
+      </label>
+    </div>
+    <p class="mode muted" id="modeNote"></p>
+    <button id="startBtn">Start camera</button>
+    <p class="err hidden" id="camErr"></p>
+  </section>
+
+  <!-- Step 2: playing -->
+  <section id="play" class="hidden" style="display:grid;gap:12px">
+    <div class="scenario-bar panel">
+      <button class="ghost" id="prevBtn" aria-label="Previous scenario">‹</button>
+      <div class="what"><small id="scnNum">Scenario 1</small><b id="scnTitle">—</b></div>
+      <button class="ghost" id="nextBtn" aria-label="Next scenario">›</button>
+    </div>
+
+    <div class="cam" id="cam">
+      <video id="video" playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <div class="hint">Sweep slowly across the room. Cards turn solid when captured.</div>
+      <div class="paused hidden" id="pausedMsg">Tap Resume to keep scanning</div>
+    </div>
+
+    <div class="panel tally">
+      <div class="big" id="scanned">0<span>/30</span></div>
+      <div class="counts" id="counts"></div>
+    </div>
+
+    <div class="actions">
+      <button class="reveal" id="revealBtn">Reveal on display</button>
+      <button class="ghost" id="pauseBtn">Pause</button>
+      <button class="ghost" id="clearBtn">Clear this round</button>
+      <a class="btn ghost" id="displayLink" target="_blank" rel="noopener" style="justify-content:center">Open display</a>
+    </div>
+
+    <div class="panel">
+      <div class="grid" id="grid"></div>
+    </div>
+
+    <div class="footer-row muted">
+      <label><input type="checkbox" id="privateChk"> Hide choices on this phone</label>
+      <span id="fps"></span>
+    </div>
+  </section>
+</main>
+
+<script src="firebase-config.js"></script>
+<script src="scenarios.js"></script>
+<script src="lib/cv.js"></script>
+<script src="lib/aruco.js"></script>
+<script src="lib/trail-dictionary.js"></script>
+<script src="lib/trail-core.js"></script>
+<script src="lib/trail-sync.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var scenarios = window.TRAIL_SCENARIOS || [];
+  var choiceColor = {}; TrailCore.CHOICES.forEach(function (c) { choiceColor[c.key] = c.color; });
+
+  /* ---------- setup ---------- */
+  var savedRoom = localStorage.getItem('trail-scan-room');
+  $('roomInput').value = savedRoom || TrailSync.makeRoomCode();
+  $('countInput').value = localStorage.getItem('trail-scan-count') || 30;
+  $('modeNote').innerHTML = TrailSync.mode === 'firebase'
+    ? 'Live mode is on. Open <b>display.html</b> on the classroom computer and enter this room code.'
+    : 'Same-device mode: Firebase is not set up yet, so the display page must be open in this same browser. See README.md to scan from your phone.';
+
+  var sync, state = { scenario: 0, revealed: false, cardCount: 30, responses: {} };
+  var cardCount = 30;
+
+  $('startBtn').addEventListener('click', function () {
+    var room = TrailSync.cleanRoom($('roomInput').value) || TrailSync.makeRoomCode();
+    cardCount = Math.max(1, Math.min(TrailCore.MAX_CARDS, parseInt($('countInput').value, 10) || 30));
+    localStorage.setItem('trail-scan-room', room);
+    localStorage.setItem('trail-scan-count', cardCount);
+    $('roomBadge').textContent = room;
+    $('displayLink').href = 'display.html?room=' + encodeURIComponent(room);
+
+    sync = TrailSync.connect(room);
+    sync.onConnection(function (ok, msg) {
+      $('conn').classList.toggle('on', ok);
+      $('conn').title = ok ? 'Connected' : ('Not connected' + (msg ? ': ' + msg : ''));
+    });
+    sync.onState(function (s) {
+      // keep readings that haven't reached the server yet
+      Object.keys(pendingWrite).forEach(function (sc) {
+        s.responses[sc] = s.responses[sc] || {};
+        Object.keys(pendingWrite[sc]).forEach(function (card) { s.responses[sc][card] = pendingWrite[sc][card]; });
+      });
+      state = s; render();
+    });
+    sync.setState({ cardCount: cardCount });
+
+    startCamera();
+  });
+
+  /* ---------- camera + detection ---------- */
+  var video = $('video'), overlay = $('overlay'), octx = overlay.getContext('2d');
+  var work = document.createElement('canvas'), wctx = work.getContext('2d', { willReadFrequently: true });
+  var detector = new AR.Detector({ dictionaryName: TrailCore.DICTIONARY });
+  var paused = false, lastMarkers = [], frameTimes = [];
+  var seen = {};          // card -> { choice, hits, t }
+  var pendingWrite = {};  // scenario -> { card -> choice }, flushed in batches
+  var flashUntil = {};
+
+  function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return showCamErr('This browser cannot use the camera here. The page must be opened over https (GitHub Pages is fine).');
+    }
+    navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+    }).then(function (stream) {
+      video.srcObject = stream;
+      return video.play();
+    }).then(function () {
+      $('setup').classList.add('hidden');
+      $('play').classList.remove('hidden');
+      keepAwake();
+      render();
+      requestAnimationFrame(loop);
+    }).catch(function (e) {
+      showCamErr('Camera did not start: ' + (e && e.message ? e.message : e) + '. Check that camera access is allowed for this site.');
+    });
+  }
+  function showCamErr(t) { $('camErr').textContent = t; $('camErr').classList.remove('hidden'); }
+
+  function keepAwake() {
+    if (!('wakeLock' in navigator)) return;
+    var req = function () { navigator.wakeLock.request('screen').catch(function () {}); };
+    req();
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') req(); });
+  }
+
+  var lastDetect = 0;
+  function loop(t) {
+    requestAnimationFrame(loop);
+    if (paused || !video.videoWidth) return;
+    if (t - lastDetect < 90) return; // about 10 scans per second
+    lastDetect = t;
+
+    var scale = Math.min(1, 1280 / video.videoWidth);
+    var w = Math.round(video.videoWidth * scale), h = Math.round(video.videoHeight * scale);
+    if (work.width !== w) { work.width = w; work.height = h; overlay.width = w; overlay.height = h; }
+    wctx.drawImage(video, 0, 0, w, h);
+    var t0 = performance.now();
+    var markers = detector.detect(wctx.getImageData(0, 0, w, h));
+    frameTimes.push(performance.now() - t0); if (frameTimes.length > 20) frameTimes.shift();
+
+    lastMarkers = [];
+    markers.forEach(function (m) {
+      var card = m.id + 1;
+      if (card > cardCount) return;
+      var choice = TrailCore.choiceFor(m.corners);
+      lastMarkers.push({ card: card, choice: choice, corners: m.corners });
+      if (!choice) return; // blank edge up: ignore
+
+      // Accept a reading only after two matching looks in a row, to avoid blur misreads
+      var s = seen[card];
+      if (s && s.choice === choice && t - s.t < 1200) s.hits++; else s = seen[card] = { choice: choice, hits: 1 };
+      s.t = t;
+      if (s.hits === 2) accept(card, choice);
+    });
+    drawOverlay();
+  }
+
+  function current() { return state.responses[state.scenario] || {}; }
+
+  function accept(card, choice) {
+    if (current()[card] === choice) return;
+    var isNew = !current()[card];
+    state.responses[state.scenario] = state.responses[state.scenario] || {};
+    state.responses[state.scenario][card] = choice; // show at once, before the round trip
+    (pendingWrite[state.scenario] = pendingWrite[state.scenario] || {})[card] = choice;
+    flashUntil[card] = performance.now() + 700;
+    if (isNew && navigator.vibrate) navigator.vibrate(12);
+    render();
+  }
+
+  function flush() {
+    if (!sync) return;
+    var batch = pendingWrite; pendingWrite = {};
+    Object.keys(batch).forEach(function (sc) { sync.record(+sc, batch[sc]); });
+  }
+  setInterval(flush, 300);
+
+  function drawOverlay() {
+    octx.clearRect(0, 0, overlay.width, overlay.height);
+    var mine = current();
+    lastMarkers.forEach(function (m) {
+      var col = m.choice ? choiceColor[m.choice] : '#8b8f86';
+      var captured = m.choice && mine[m.card] === m.choice;
+      var c = m.corners;
+      octx.beginPath();
+      octx.moveTo(c[0].x, c[0].y);
+      for (var i = 1; i < 4; i++) octx.lineTo(c[i].x, c[i].y);
+      octx.closePath();
+      octx.lineWidth = Math.max(3, overlay.width / 300);
+      octx.strokeStyle = col;
+      if (captured) { octx.fillStyle = col + 'cc'; octx.fill(); }
+      octx.stroke();
+      var cx = (c[0].x + c[1].x + c[2].x + c[3].x) / 4, cy = (c[0].y + c[1].y + c[2].y + c[3].y) / 4;
+      var fs = Math.max(14, Math.hypot(c[1].x - c[0].x, c[1].y - c[0].y) * .45);
+      octx.font = '800 ' + fs + 'px system-ui, sans-serif';
+      octx.textAlign = 'center'; octx.textBaseline = 'middle';
+      octx.lineWidth = 4; octx.strokeStyle = 'rgba(0,0,0,.6)';
+      octx.strokeText(m.card, cx, cy);
+      octx.fillStyle = '#fff'; octx.fillText(m.card, cx, cy);
+    });
+    if (frameTimes.length) {
+      var avg = frameTimes.reduce(function (a, b) { return a + b; }, 0) / frameTimes.length;
+      $('fps').textContent = 'Scan time ' + Math.round(avg) + ' ms';
+    }
+  }
+
+  /* ---------- controls ---------- */
+  function go(delta) {
+    if (!sync || !scenarios.length) return;
+    var next = Math.max(0, Math.min(scenarios.length - 1, state.scenario + delta));
+    if (next === state.scenario) return;
+    seen = {}; flush();
+    sync.setState({ scenario: next, revealed: false });
+  }
+  $('prevBtn').addEventListener('click', function () { go(-1); });
+  $('nextBtn').addEventListener('click', function () { go(1); });
+  $('revealBtn').addEventListener('click', function () { sync.setState({ revealed: !state.revealed }); });
+  $('clearBtn').addEventListener('click', function () {
+    if (!confirm('Clear every response for this scenario?')) return;
+    seen = {}; delete pendingWrite[state.scenario];
+    sync.clear(state.scenario);
+    sync.setState({ revealed: false });
+  });
+  $('pauseBtn').addEventListener('click', function () {
+    paused = !paused;
+    $('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
+    $('pausedMsg').classList.toggle('hidden', !paused);
+    if (paused) octx.clearRect(0, 0, overlay.width, overlay.height);
+  });
+  $('privateChk').addEventListener('change', function () { $('grid').classList.toggle('private', this.checked); render(); });
+
+  /* ---------- render ---------- */
+  var gridBuiltFor = 0;
+  function render() {
+    var sc = scenarios[state.scenario];
+    $('scnNum').textContent = scenarios.length ? 'Scenario ' + (state.scenario + 1) + ' of ' + scenarios.length : 'No scenarios loaded';
+    $('scnTitle').textContent = sc ? (sc.title || sc.text) : 'Add scenarios in scenarios.js';
+    $('prevBtn').disabled = state.scenario <= 0;
+    $('nextBtn').disabled = state.scenario >= scenarios.length - 1;
+    $('revealBtn').classList.toggle('on', state.revealed);
+    $('revealBtn').textContent = state.revealed ? 'Hide results' : 'Reveal on display';
+
+    var mine = current();
+    var tally = TrailCore.tally(mine, cardCount);
+    $('scanned').innerHTML = tally.total + '<span>/' + cardCount + '</span>';
+    var hide = $('privateChk').checked;
+    $('counts').innerHTML = hide ? '<span class="muted">Choices hidden</span>' :
+      TrailCore.CHOICES.map(function (c) {
+        return '<span class="chip c-' + c.key + '">' + c.short + ' ' + tally.counts[c.key] + '</span>';
+      }).join('');
+
+    var grid = $('grid');
+    if (gridBuiltFor !== cardCount) {
+      var h = '';
+      for (var i = 1; i <= cardCount; i++) h += '<div id="g' + i + '">' + i + '</div>';
+      grid.innerHTML = h; gridBuiltFor = cardCount;
+    }
+    var now = performance.now();
+    for (var n = 1; n <= cardCount; n++) {
+      var el = document.getElementById('g' + n);
+      el.className = (mine[n] || '') + (flashUntil[n] > now ? ' flash' : '');
+    }
+  }
+  setInterval(function () { if (!$('play').classList.contains('hidden')) render(); }, 400);
+})();
+</script>
+</body>
+</html>
